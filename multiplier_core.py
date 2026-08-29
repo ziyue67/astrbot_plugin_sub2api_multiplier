@@ -150,10 +150,6 @@ def format_report(instance_name: str, report: MultiplierReport) -> str:
         if group.dynamic_rate_enabled and group.dynamic_rate_markup is not None:
             details.append(f"动态加成：{format_multiplier(group.dynamic_rate_markup)}x")
         lines.append(" ".join(details))
-        if group.model_names:
-            lines.append(f"  模型：{', '.join(group.model_names)}")
-        else:
-            lines.append("  模型：接口未提供模型清单")
 
     if report.minimum_multiplier is not None:
         lines.extend(
@@ -162,14 +158,6 @@ def format_report(instance_name: str, report: MultiplierReport) -> str:
                 f"最低基础倍率：{format_multiplier(report.minimum_multiplier)}x",
                 "最低倍率分组：" + "、".join(group.name for group in report.minimum_groups),
             ]
-        )
-        minimum_models = _unique(
-            model
-            for group in report.minimum_groups
-            for model in group.model_names
-        )
-        lines.append(
-            "最低倍率模型：" + (", ".join(minimum_models) if minimum_models else "接口未提供模型清单")
         )
     return "\n".join(lines)
 

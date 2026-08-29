@@ -78,8 +78,9 @@ def test_build_report_returns_all_tied_minimum_groups_and_models():
     assert [group.name for group in report.minimum_groups] == ["低价组", "另一个低价组"]
     text = format_report("主站", report)
     assert "最低基础倍率：0.5x" in text
-    assert "gpt-4o-mini" in text
-    assert "claude-3-5" in text
+    assert "gpt-4o-mini" not in text
+    assert "claude-3-5" not in text
+    assert "最低倍率模型" not in text
 
 
 def test_report_shows_peak_and_dynamic_multipliers_separately():
