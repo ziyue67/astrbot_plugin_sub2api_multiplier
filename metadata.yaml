@@ -1,0 +1,14 @@
+name: astrbot_plugin_sub2api_multiplier
+display_name: Sub2API 倍率查询
+short_desc: 查询 Sub2API 各分组模型倍率和最低倍率
+desc: 通过 Sub2API 管理员 API Key 获取启用分组的模型倍率，并通过 AstrBot 消息发送查询结果。
+version: 1.0.0
+author: Codex
+repo: https://github.com/ziyue67/astrbot_plugin_sub2api_multiplier
+astrbot_version: ">=4.10.4"
+support_platforms:
+  - aiocqhttp
+tags:
+  - sub2api
+  - QQ
+  - 倍率

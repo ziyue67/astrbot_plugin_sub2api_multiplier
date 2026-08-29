@@ -1,0 +1,56 @@
+{
+  "instances": {
+    "type": "template_list",
+    "description": "Sub2API 实例列表",
+    "hint": "每个实例填写域名和 Sub2API 后台管理员 API Key。",
+    "templates": {
+      "sub2api_instance": {
+        "name": "Sub2API 实例",
+        "hint": "配置一个 Sub2API 后端实例。",
+        "display_item": "name",
+        "items": {
+          "name": {
+            "description": "实例名称",
+            "type": "string",
+            "default": "Sub2API"
+          },
+          "base_url": {
+            "description": "Sub2API 域名",
+            "type": "string",
+            "hint": "填写 http:// 或 https:// 开头的站点地址，不要填写管理接口路径。",
+            "default": ""
+          },
+          "admin_api_key": {
+            "description": "管理员 API Key",
+            "type": "text",
+            "hint": "只保存到插件配置中，用于 x-api-key 请求头，不会发送到 QQ。",
+            "default": "",
+            "secret": true
+          }
+        }
+      }
+    }
+  },
+  "cache_ttl_minutes": {
+    "description": "倍率缓存时间（分钟）",
+    "type": "float",
+    "hint": "设置为 0 表示每次命令都实时请求。",
+    "default": 5.0
+  },
+  "timeout_seconds": {
+    "description": "请求超时时间（秒）",
+    "type": "float",
+    "default": 10.0
+  },
+  "max_message_chars": {
+    "description": "单条消息最大字符数",
+    "type": "int",
+    "hint": "超过此长度时会自动分段发送。",
+    "default": 3000
+  },
+  "include_inactive": {
+    "description": "是否包含停用分组",
+    "type": "bool",
+    "default": false
+  }
+}
