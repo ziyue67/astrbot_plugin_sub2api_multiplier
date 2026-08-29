@@ -18,9 +18,11 @@ try:
         MultiplierReport,
         Sub2APIError,
         Sub2APIGroupRate,
+        Sub2APIGroupHealth,
         Sub2APIInstanceConfig,
         build_report,
         fetch_groups,
+        fetch_group_health,
         format_report,
         split_message,
     )
@@ -29,9 +31,11 @@ except ImportError:  # Support loaders that execute main.py as a top-level modul
         MultiplierReport,
         Sub2APIError,
         Sub2APIGroupRate,
+        Sub2APIGroupHealth,
         Sub2APIInstanceConfig,
         build_report,
         fetch_groups,
+        fetch_group_health,
         format_report,
         split_message,
     )
@@ -41,12 +45,16 @@ except ImportError:  # Support loaders that execute main.py as a top-level modul
 class _CacheEntry:
     expires_at: float
     groups: tuple[Sub2APIGroupRate, ...]
+    health: tuple[Sub2APIGroupHealth, ...] = ()
+    monitor_error: str | None = None
 
 
 @dataclass(frozen=True)
 class _InstanceResult:
     instance: Sub2APIInstanceConfig
     report: MultiplierReport | None = None
+    health: tuple[Sub2APIGroupHealth, ...] = ()
+    monitor_error: str | None = None
     error: str | None = None
 
 
@@ -61,6 +69,8 @@ class Sub2APIMultiplierPlugin(Star):
         self.timeout_seconds = max(1.0, _as_float(config.get("timeout_seconds"), 10.0))
         self.max_message_chars = max(200, _as_int(config.get("max_message_chars"), 3000))
         self.include_inactive = _as_bool(config.get("include_inactive"), False)
+        self.monitor_enabled = _as_bool(config.get("monitor_enabled"), True)
+        self.monitor_range = _normalize_monitor_range(config.get("monitor_range"))
         self._cache: dict[str, _CacheEntry] = {}
         self._client: httpx.AsyncClient | None = None
 
@@ -91,7 +101,20 @@ class Sub2APIMultiplierPlugin(Star):
         sections: list[str] = ["Sub2API 模型倍率查询"]
         for result in results:
             if result.report is not None:
-                sections.append(format_report(result.instance.name, result.report))
+                monitor_error = result.monitor_error
+                if not self.monitor_enabled:
+                    monitor_error = "V2不可用"
+                elif monitor_error:
+                    monitor_error = f"V2不可用（{monitor_error}）"
+                sections.append(
+                    format_report(
+                        result.instance.name,
+                        result.report,
+                        health=result.health,
+                        monitor_range=self.monitor_range if self.monitor_enabled else None,
+                        monitor_error=monitor_error,
+                    )
+                )
             elif result.error:
                 sections.append(f"【{result.instance.name}】查询失败：{result.error}")
 
@@ -106,20 +129,66 @@ class Sub2APIMultiplierPlugin(Star):
             now = time.monotonic()
             cached = self._cache.get(instance.cache_key)
             if cached and cached.expires_at > now:
-                return _InstanceResult(instance=instance, report=build_report(cached.groups))
+                return _InstanceResult(
+                    instance=instance,
+                    report=build_report(cached.groups),
+                    health=cached.health,
+                    monitor_error=cached.monitor_error,
+                )
 
-            groups = await fetch_groups(
-                instance,
-                include_inactive=self.include_inactive,
-                timeout_seconds=self.timeout_seconds,
-                client=client,
-            )
+            tasks = [
+                fetch_groups(
+                    instance,
+                    include_inactive=self.include_inactive,
+                    timeout_seconds=self.timeout_seconds,
+                    client=client,
+                )
+            ]
+            if self.monitor_enabled:
+                tasks.append(
+                    fetch_group_health(
+                        instance,
+                        monitor_range=self.monitor_range,
+                        timeout_seconds=self.timeout_seconds,
+                        client=client,
+                    )
+                )
+            responses = await asyncio.gather(*tasks, return_exceptions=True)
+
+            groups_result = responses[0]
+            if isinstance(groups_result, Exception):
+                raise groups_result
+            groups = tuple(groups_result)
+
+            health: tuple[Sub2APIGroupHealth, ...] = ()
+            monitor_error: str | None = None
+            if self.monitor_enabled:
+                health_result = responses[1]
+                if isinstance(health_result, Exception):
+                    monitor_error = str(health_result)
+                    logger.warning(
+                        "Sub2API 渠道状态 V2 查询失败: instance=%s reason=%s",
+                        instance.name,
+                        monitor_error,
+                    )
+                else:
+                    health = tuple(health_result)
+            else:
+                monitor_error = "V2不可用"
+
             if self.cache_ttl_seconds > 0:
                 self._cache[instance.cache_key] = _CacheEntry(
                     expires_at=time.monotonic() + self.cache_ttl_seconds,
                     groups=groups,
+                    health=health,
+                    monitor_error=monitor_error,
                 )
-            return _InstanceResult(instance=instance, report=build_report(groups))
+            return _InstanceResult(
+                instance=instance,
+                report=build_report(groups),
+                health=health,
+                monitor_error=monitor_error,
+            )
         except Sub2APIError as exc:
             logger.warning("Sub2API 倍率查询失败: instance=%s reason=%s", instance.name, str(exc))
             return _InstanceResult(instance=instance, error=str(exc))
@@ -186,3 +255,8 @@ def _as_bool(value: Any, default: bool) -> bool:
     if isinstance(value, str):
         return value.strip().lower() in {"1", "true", "yes", "on"}
     return bool(value)
+
+
+def _normalize_monitor_range(value: Any) -> str:
+    selected = str(value or "24h").strip().lower()
+    return selected if selected in {"90m", "24h", "7d", "30d"} else "24h"

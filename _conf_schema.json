@@ -52,5 +52,17 @@
     "description": "是否包含停用分组",
     "type": "bool",
     "default": false
+  },
+  "monitor_enabled": {
+    "description": "启用渠道状态 V2 监控",
+    "type": "bool",
+    "hint": "开启后会查询每个分组的渠道状态和缓存率。",
+    "default": true
+  },
+  "monitor_range": {
+    "description": "渠道状态 V2 统计时间范围",
+    "type": "string",
+    "hint": "可选：90m、24h、7d、30d。",
+    "default": "24h"
   }
 }
